@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  --font-sans: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Space Grotesk", "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+
+  --color-ink: #101828;
+  --color-ink-muted: #475467;
+  --color-ink-soft: #667085;
+
+  --color-surface: #ffffff;
+  --color-surface-alt: #f7f5f0;
+  --color-surface-mute: #f1eee7;
+  --color-canvas: #f3f1ec;
+
+  --color-border: rgba(16, 24, 40, 0.12);
+  --color-border-strong: rgba(16, 24, 40, 0.2);
+
+  --color-brand: #0f766e;
+  --color-brand-strong: #0b5f59;
+  --color-accent: #f59e0b;
+  --color-accent-soft: #fef3c7;
+
+  --shadow-soft: 0 14px 28px rgba(15, 23, 42, 0.12);
+  --shadow-card: 0 10px 18px rgba(15, 23, 42, 0.08);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --color-background: var(--color-canvas);
+  --color-background-soft: var(--color-surface-alt);
+  --color-background-mute: var(--color-surface-mute);
+  --color-border-hover: var(--color-border-strong);
+  --color-heading: var(--color-ink);
+  --color-text: var(--color-ink);
+
+  --section-gap: 160px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  font-weight: normal;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--color-text);
+  background:
+    radial-gradient(1200px 800px at 8% -12%, rgba(15, 118, 110, 0.18), transparent 60%),
+    radial-gradient(900px 700px at 110% 8%, rgba(245, 158, 11, 0.18), transparent 55%),
+    var(--color-background);
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease;
+  line-height: 1.6;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  letter-spacing: 0.1px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(15, 118, 110, 0.2);
+  color: var(--color-ink);
+}

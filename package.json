@@ -1,0 +1,30 @@
+{
+  "name": "flowable_iu",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:analyze": "ANALYZE=1 vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bpmn-io/properties-panel": "^3.36.0",
+    "bpmn-js": "^18.10.1",
+    "bpmn-js-properties-panel": "^5.48.0",
+    "lucide-vue-next": "^0.563.0",
+    "vue": "^3.5.27",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.3",
+    "rollup-plugin-visualizer": "^6.0.5",
+    "terser": "^5.46.0",
+    "vite": "^7.3.1",
+    "vite-plugin-compression": "^0.5.1"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}
