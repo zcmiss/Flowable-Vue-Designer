@@ -116,9 +116,6 @@ onMounted(() => {
     ],
     moddleExtensions: {
       flowable: flowableModdleDescriptor
-    },
-    keyboard: {
-      bindTo: window
     }
   });
 
@@ -332,6 +329,7 @@ async function handleSaveModel(payload) {
     const requestPayload = {
       name: payload.name,
       key: payload.key,
+      description: payload.description,
       bpmnXml: currentBpmnXml.value
     };
     let response;
@@ -341,11 +339,15 @@ async function handleSaveModel(payload) {
       response = await modelApi.create(requestPayload);
     }
 
-    currentModelId.value = response.id;
-    currentModelName.value = response.name || payload.name;
-    currentModelKey.value = response.key || payload.key;
-    toast.value?.add('模型保存成功', 'success');
-    isSaveDialogOpen.value = false;
+    if (response) {
+      currentModelId.value = response.id;
+      currentModelName.value = response.name || payload.name;
+      currentModelKey.value = response.key || payload.key;
+      toast.value?.add('模型保存成功', 'success');
+      isSaveDialogOpen.value = false;
+    } else {
+      throw new Error('服务器未返回有效的模型数据');
+    }
   } catch (err) {
     saveDialogError.value = err.message || '模型保存失败';
   } finally {
@@ -387,6 +389,26 @@ async function handleDeleteModel(modelId) {
     console.error('Error deleting model:', err);
     toast.value?.add('删除模型失败: ' + (err.message || 'Unknown error'), 'error');
     modelListLoading.value = false; // Ensure loading stops if fetchModelList isn't called or fails
+  }
+}
+
+async function loadModel(modelId) {
+  try {
+    const model = await modelApi.get(modelId);
+    if (model && model.bpmnXml) {
+      await createDiagram(model.bpmnXml);
+      currentBpmnXml.value = model.bpmnXml;
+      currentModelId.value = model.id;
+      currentModelName.value = model.name;
+      currentModelKey.value = model.key;
+      currentProcessName.value = extractProcessName(model.bpmnXml);
+      toast.value?.add('模型加载成功', 'success');
+    } else {
+      toast.value?.add('模型数据为空', 'warning');
+    }
+  } catch (err) {
+    console.error('Error loading model:', err);
+    toast.value?.add('加载模型失败: ' + (err.message || 'Unknown error'), 'error');
   }
 }
 

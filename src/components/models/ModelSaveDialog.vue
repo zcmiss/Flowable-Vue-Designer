@@ -45,6 +45,10 @@ function handleSave() {
     localError.value = '请输入模型名称';
     return;
   }
+  if (!key.value.trim()) {
+    localError.value = '请输入模型 Key';
+    return;
+  }
   localError.value = '';
   emit('save', {
     name: name.value.trim(),
@@ -82,7 +86,7 @@ function handleSave() {
             </div>
 
             <div class="form-group">
-              <label for="modelKey">模型 Key（可选）</label>
+              <label for="modelKey">模型 Key</label>
               <input
                 id="modelKey"
                 v-model="key"
