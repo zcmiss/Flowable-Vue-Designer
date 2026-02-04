@@ -11,6 +11,7 @@ export default {
   'Create end event': '创建结束事件 (流程的终止)',
   'Create gateway': '创建网关 (流程的分支与合并)',
   'Create task': '创建任务 (执行具体的工作步骤)',
+  'Create User Task': '创建用户任务 (需人工处理)',
   'Create data object reference': '创建数据对象 (引用流程数据)',
   'Create data store reference': '创建数据存储 (引用外部存储)',
   'Create expanded sub-process': '创建扩展子流程 (封装一组步骤)',
@@ -22,6 +23,7 @@ export default {
   'Append EndEvent': '追加结束事件',
   'Append Gateway': '追加网关',
   'Append Task': '追加任务',
+  'Append User Task': '追加用户任务',
   'Append Intermediate/Boundary Event': '追加中间/边界事件',
   
   // Context Pad Actions

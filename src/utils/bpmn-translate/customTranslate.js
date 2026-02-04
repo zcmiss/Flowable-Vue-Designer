@@ -1,20 +1,17 @@
 import translations from './zh';
 
+// Pre-compute a Map for faster case-insensitive lookup
+const translationMap = new Map();
+Object.keys(translations).forEach(key => {
+  translationMap.set(key, translations[key]);
+  translationMap.set(key.toLowerCase(), translations[key]);
+});
+
 export default function customTranslate(template, replacements) {
   replacements = replacements || {};
 
-  // Try exact match
-  let translated = translations[template];
-
-  // If not found, try case-insensitive match (robustness)
-  if (!translated) {
-    const lowerTemplate = template.toLowerCase();
-    // Loop through keys to find a case-insensitive match (performance trade-off but safer for small sets)
-    const key = Object.keys(translations).find(k => k.toLowerCase() === lowerTemplate);
-    if (key) {
-      translated = translations[key];
-    }
-  }
+  // Fast O(1) lookup
+  let translated = translationMap.get(template) || translationMap.get(template.toLowerCase());
 
   // Fallback to original
   template = translated || template;

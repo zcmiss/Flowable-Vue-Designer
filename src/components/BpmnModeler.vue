@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onBeforeUnmount, ref, shallowRef } from 'vue';
+import { onMounted, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import BpmnModeler from 'bpmn-js/lib/Modeler';
 import {
   BpmnPropertiesPanelModule,
@@ -8,23 +8,33 @@ import {
 import flowableModdleDescriptor from '../assets/flowable.json';
 import FlowablePropertiesProvider from './properties-panel/provider';
 import customTranslate from '../utils/bpmn-translate/customTranslate';
+import customControlsModule from './custom';
 import translations from '../utils/bpmn-translate/zh';
 import Toast from './ui/Toast.vue';
 import FormDataEditor from './properties-panel/FormDataEditor.vue';
+import ModelSaveDialog from './models/ModelSaveDialog.vue';
+import ModelOpenDialog from './models/ModelOpenDialog.vue';
+import { modelApi } from '../api/flowable.js';
 
-import { 
-  FolderOpen, 
-  FileCode, 
-  FileImage, 
-  Undo2, 
-  Redo2, 
-  ZoomIn, 
-  ZoomOut, 
+import {
+  FolderOpen,
+  FileCode,
+  FileImage,
+  Download,
+  ChevronDown,
+  Save,
+  Database,
+  Undo2,
+  Redo2,
+  ZoomIn,
+  ZoomOut,
   Maximize,
   Settings,
   PanelRightOpen,
-  PanelRightClose
+  PanelRightClose,
+  Upload
 } from 'lucide-vue-next';
+import DeployDialog from './deploy/DeployDialog.vue';
 
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
@@ -39,10 +49,25 @@ const fileInput = ref(null);
 const toast = ref(null);
 const isPropertiesPanelOpen = ref(true);
 const isFormDataPanelOpen = ref(false);
-const selectedElement = ref(null);
-let paletteObserver = null;
+const selectedElement = shallowRef(null);
+const isDeployDialogOpen = ref(false);
+const currentProcessName = ref('process');
+const currentBpmnXml = ref('');
+const isExportMenuOpen = ref(false);
+const exportMenuRef = ref(null);
+const isSaveDialogOpen = ref(false);
+const isOpenDialogOpen = ref(false);
+const currentModelId = ref('');
+const currentModelKey = ref('');
+const currentModelName = ref('');
+const modelList = ref([]);
+const modelListLoading = ref(false);
+const modelListError = ref('');
+const saveDialogLoading = ref(false);
+const saveDialogError = ref('');
 let selectionChangeListener = null;
 let elementChangeListener = null;
+let documentClickListener = null;
 
 const defaultXml = `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" 
@@ -83,6 +108,7 @@ onMounted(() => {
       BpmnPropertiesPanelModule,
       BpmnPropertiesProviderModule,
       customTranslateModule,
+      customControlsModule,
       {
         __init__: [ 'flowablePropertiesProvider' ],
         flowablePropertiesProvider: [ 'type', FlowablePropertiesProvider ]
@@ -97,9 +123,6 @@ onMounted(() => {
   });
 
   createDiagram(defaultXml);
-
-  // Start observing the palette for changes to ensure tooltips are translated
-  startPaletteObserver();
 
   // Listen for selection changes
   selectionChangeListener = (e) => {
@@ -153,12 +176,16 @@ onMounted(() => {
     }
   };
   modeler.value.on('element.changed', elementChangeListener);
+
+  documentClickListener = (event) => {
+    if (!exportMenuRef.value) return;
+    if (exportMenuRef.value.contains(event.target)) return;
+    isExportMenuOpen.value = false;
+  };
+  document.addEventListener('click', documentClickListener);
 });
 
 onBeforeUnmount(() => {
-  if (paletteObserver) {
-    paletteObserver.disconnect();
-  }
   if (modeler.value) {
     if (selectionChangeListener) {
       modeler.value.off('selection.changed', selectionChangeListener);
@@ -167,87 +194,14 @@ onBeforeUnmount(() => {
       modeler.value.off('element.changed', elementChangeListener);
     }
   }
+  if (documentClickListener) {
+    document.removeEventListener('click', documentClickListener);
+  }
 });
 
-function startPaletteObserver() {
-  // Wait for the palette to exist in the DOM
-  const checkPalette = setInterval(() => {
-    const palette = container.value?.querySelector('.djs-palette');
-    if (palette) {
-      clearInterval(checkPalette);
-      
-      // Apply initial translation
-      updatePaletteTooltips(palette);
 
-      // Observe for future changes (e.g. if palette is redrawn)
-      paletteObserver = new MutationObserver(() => {
-        updatePaletteTooltips(palette);
-      });
-      
-      paletteObserver.observe(palette, { childList: true, subtree: true });
-    }
-  }, 100);
-}
 
-function updatePaletteTooltips(palette) {
-  const mapping = {
-    'create.start-event': 'Create start event',
-    'create.intermediate-event': 'Create intermediate/boundary event',
-    'create.end-event': 'Create end event',
-    'create.exclusive-gateway': 'Create gateway',
-    'create.task': 'Create task',
-    'create.data-object': 'Create data object reference',
-    'create.data-store': 'Create data store reference',
-    'create.subprocess-expanded': 'Create expanded sub-process',
-    'create.participant-expanded': 'Create pool/participant',
-    'create.group': 'Create group',
-    'hand-tool': 'Activate hand tool',
-    'lasso-tool': 'Activate lasso tool',
-    'space-tool': 'Activate create/remove space tool',
-    'global-connect-tool': 'Activate global connect tool'
-  };
 
-  const entries = palette.querySelectorAll('.entry');
-  entries.forEach(entry => {
-    const action = entry.getAttribute('data-action');
-    if (action && mapping[action]) {
-      const translationKey = mapping[action];
-      const translated = findTranslation(translationKey);
-
-      // Remove default title tooltip to prevent browser default tooltip
-      entry.removeAttribute('title');
-
-      // Check if tooltip already exists
-      let tooltipEl = entry.querySelector('.entry-tooltip');
-      let tooltipArrowEl = entry.querySelector('.entry-tooltip-arrow');
-
-      // Create tooltip elements if they don't exist and we have a translation
-      if (translated) {
-        if (!tooltipEl) {
-          tooltipEl = document.createElement('span');
-          tooltipEl.className = 'entry-tooltip';
-          entry.appendChild(tooltipEl);
-        }
-        if (!tooltipArrowEl) {
-          tooltipArrowEl = document.createElement('span');
-          tooltipArrowEl.className = 'entry-tooltip-arrow';
-          entry.appendChild(tooltipArrowEl);
-        }
-        // Update tooltip text
-        if (tooltipEl.textContent !== translated) {
-          tooltipEl.textContent = translated;
-        }
-      }
-    }
-  });
-}
-
-function findTranslation(key) {
-  if (translations[key]) return translations[key];
-  const lowerKey = key.toLowerCase();
-  const match = Object.keys(translations).find(k => k.toLowerCase() === lowerKey);
-  return match ? translations[match] : null;
-}
 
 async function createDiagram(xml) {
   try {
@@ -269,7 +223,13 @@ function handleFileUpload(event) {
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    createDiagram(e.target.result);
+    const xml = e.target.result;
+    createDiagram(xml);
+    currentBpmnXml.value = xml;
+    currentModelId.value = '';
+    currentModelKey.value = '';
+    currentModelName.value = extractProcessName(xml);
+    currentProcessName.value = currentModelName.value;
     toast.value?.add('文件导入成功', 'success');
   };
   reader.onerror = () => {
@@ -282,7 +242,8 @@ function handleFileUpload(event) {
 async function exportDiagram() {
   try {
     const { xml } = await modeler.value.saveXML({ format: true });
-    downloadFile(xml, 'diagram.bpmn', 'application/xml');
+    const name = currentModelName.value || currentProcessName.value || 'diagram';
+    downloadFile(xml, `${name}.bpmn20.xml`, 'application/xml');
     toast.value?.add('XML 导出成功', 'success');
   } catch (err) {
     console.error('could not save BPMN 2.0 diagram', err);
@@ -290,15 +251,148 @@ async function exportDiagram() {
   }
 }
 
+function toggleExportMenu() {
+  isExportMenuOpen.value = !isExportMenuOpen.value;
+}
+
+function closeExportMenu() {
+  isExportMenuOpen.value = false;
+}
+
+function handleExportXml() {
+  closeExportMenu();
+  exportDiagram();
+}
+
+function handleExportSvg() {
+  closeExportMenu();
+  exportSvg();
+}
+
 async function exportSvg() {
   try {
     const { svg } = await modeler.value.saveSVG();
-    downloadFile(svg, 'diagram.svg', 'image/svg+xml');
+    const name = currentModelName.value || currentProcessName.value || 'diagram';
+    downloadFile(svg, `${name}.svg`, 'image/svg+xml');
     toast.value?.add('SVG 导出成功', 'success');
   } catch (err) {
     console.error('could not save SVG', err);
     toast.value?.add('SVG 导出失败', 'error');
   }
+}
+function extractProcessName(xml) {
+  if (!xml) return 'process';
+  const match = xml.match(/id="([^"]+)"/);
+  return match ? match[1] : 'process';
+}
+
+async function openDeployDialog() {
+  try {
+    const { xml } = await modeler.value.saveXML({ format: true });
+    currentBpmnXml.value = xml;
+    // Extract process name from XML
+    const match = xml.match(/id="([^"]+)"/);
+    currentProcessName.value = match ? match[1] : 'process';
+    isDeployDialogOpen.value = true;
+  } catch (err) {
+    toast.value?.add('获取流程 XML 失败', 'error');
+  }
+}
+
+function handleDeployed(result) {
+  toast.value?.add(`流程部署成功: ${result.id}`, 'success');
+}
+
+async function openSaveDialog() {
+  try {
+    const { xml } = await modeler.value.saveXML({ format: true });
+    currentBpmnXml.value = xml;
+    const processName = extractProcessName(xml);
+    currentProcessName.value = processName;
+    if (!currentModelName.value) {
+      currentModelName.value = processName;
+    }
+    saveDialogError.value = '';
+    isSaveDialogOpen.value = true;
+  } catch (err) {
+    toast.value?.add('获取流程 XML 失败', 'error');
+  }
+}
+
+async function handleSaveModel(payload) {
+  if (!currentBpmnXml.value) {
+    saveDialogError.value = '没有可保存的 BPMN 内容';
+    return;
+  }
+
+  saveDialogLoading.value = true;
+  saveDialogError.value = '';
+
+  try {
+    const requestPayload = {
+      name: payload.name,
+      key: payload.key,
+      bpmnXml: currentBpmnXml.value
+    };
+    let response;
+    if (currentModelId.value) {
+      response = await modelApi.update(currentModelId.value, requestPayload);
+    } else {
+      response = await modelApi.create(requestPayload);
+    }
+
+    currentModelId.value = response.id;
+    currentModelName.value = response.name || payload.name;
+    currentModelKey.value = response.key || payload.key;
+    toast.value?.add('模型保存成功', 'success');
+    isSaveDialogOpen.value = false;
+  } catch (err) {
+    saveDialogError.value = err.message || '模型保存失败';
+  } finally {
+    saveDialogLoading.value = false;
+  }
+}
+
+async function openModelDialog() {
+  isOpenDialogOpen.value = true;
+  await fetchModelList();
+}
+
+async function fetchModelList() {
+  modelListLoading.value = true;
+  modelListError.value = '';
+  try {
+    const list = await modelApi.list();
+    modelList.value = list.map(m => ({
+      id: m.id,
+      name: m.name,
+      key: m.key,
+      lastUpdated: m.lastUpdateTime ? new Date(m.lastUpdateTime).toLocaleString() : ''
+    }));
+  } catch (err) {
+    console.error('Error fetching models:', err);
+    modelListError.value = '获取模型列表失败: ' + (err.message || 'Unknown error');
+  } finally {
+    modelListLoading.value = false;
+  }
+}
+
+async function handleDeleteModel(modelId) {
+  try {
+    modelListLoading.value = true;
+    await modelApi.delete(modelId);
+    toast.value?.add('模型删除成功', 'success');
+    await fetchModelList(); // Refresh list
+  } catch (err) {
+    console.error('Error deleting model:', err);
+    toast.value?.add('删除模型失败: ' + (err.message || 'Unknown error'), 'error');
+    modelListLoading.value = false; // Ensure loading stops if fetchModelList isn't called or fails
+  }
+}
+
+function handleSelectModel(model) {
+  isOpenDialogOpen.value = false;
+  loadModel(model.id);
 }
 
 function downloadFile(content, fileName, mimeType) {
@@ -312,7 +406,6 @@ function downloadFile(content, fileName, mimeType) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 // Editor Actions
 function handleUndo() {
   modeler.value.get('commandStack').undo();
@@ -396,16 +489,20 @@ function updateFormData(fields) {
     <Toast ref="toast" />
     <header class="toolbar">
       <div class="brand">
-        <!-- Optional: Add Logo here -->
+        <svg class="brand-logo" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#41B883"/>
+          <path d="M2 17L12 22L22 17" stroke="#41B883" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 12L12 17L22 12" stroke="#34495E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
         <span class="brand-text">Flowable Designer</span>
       </div>
 
       <div class="separator"></div>
 
       <div class="actions">
-        <button class="btn" @click="triggerFileInput" title="Open BPMN File">
+        <button class="btn" @click="triggerFileInput" title="导入 BPMN 文件">
           <FolderOpen :size="18" />
-          <span>打开</span>
+          <span>导入</span>
         </button>
         <input 
           type="file" 
@@ -415,15 +512,40 @@ function updateFormData(fields) {
           style="display: none" 
         />
         
+        <button class="btn" @click="openSaveDialog" title="保存模型">
+          <Save :size="18" />
+          <span>保存</span>
+        </button>
+        <button class="btn" @click="openModelDialog" title="打开模型">
+          <Database :size="18" />
+          <span>模型</span>
+        </button>
+
         <div class="separator-vertical"></div>
 
-        <button class="btn" @click="exportDiagram" title="Download BPMN XML">
-          <FileCode :size="18" />
-          <span>XML</span>
-        </button>
-        <button class="btn" @click="exportSvg" title="Download SVG Image">
-          <FileImage :size="18" />
-          <span>SVG</span>
+        <div class="export-menu" ref="exportMenuRef">
+          <button class="btn" @click.stop="toggleExportMenu" title="导出">
+            <Download :size="18" />
+            <span>导出</span>
+            <ChevronDown :size="14" class="chevron" />
+          </button>
+          <div v-if="isExportMenuOpen" class="export-dropdown">
+            <button class="export-item" @click="handleExportXml">
+              <FileCode :size="16" />
+              导出 XML
+            </button>
+            <button class="export-item" @click="handleExportSvg">
+              <FileImage :size="16" />
+              导出 SVG
+            </button>
+          </div>
+        </div>
+
+        <div class="separator-vertical"></div>
+
+        <button class="btn" @click="openDeployDialog" title="部署到 Flowable">
+          <Upload :size="18" />
+          <span>部署</span>
         </button>
 
         <div class="separator-vertical"></div>
@@ -460,6 +582,34 @@ function updateFormData(fields) {
         </button>
       </div>
     </header>
+
+    <!-- Deploy Dialog -->
+    <DeployDialog
+      v-model="isDeployDialogOpen"
+      :bpmn-xml="currentBpmnXml"
+      :process-name="currentProcessName"
+      @deployed="handleDeployed"
+    />
+
+    <ModelSaveDialog
+      v-model="isSaveDialogOpen"
+      :default-name="currentModelName || currentProcessName"
+      :default-key="currentModelKey"
+      :loading="saveDialogLoading"
+      :error="saveDialogError"
+      :is-update="Boolean(currentModelId)"
+      @save="handleSaveModel"
+    />
+
+    <ModelOpenDialog
+      v-model="isOpenDialogOpen"
+      :models="modelList"
+      :loading="modelListLoading"
+      :error="modelListError"
+      @refresh="fetchModelList"
+      @select="handleSelectModel"
+      @delete="handleDeleteModel"
+    />
 
     <div class="workspace">
       <div ref="container" class="canvas"></div>
@@ -521,6 +671,16 @@ function updateFormData(fields) {
   z-index: 10;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  display: block;
+}
+
 .brand-text {
   font-weight: 700;
   font-size: 18px;
@@ -536,6 +696,46 @@ function updateFormData(fields) {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.export-menu {
+  position: relative;
+}
+
+.export-dropdown {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 20;
+}
+
+.export-item {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.export-item:hover {
+  background-color: #f5f7fa;
+}
+
+.chevron {
+  margin-left: 2px;
 }
 
 .separator-vertical {
