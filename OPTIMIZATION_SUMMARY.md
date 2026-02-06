@@ -26,12 +26,12 @@
 - ✅ 引入 Vue Router 4.6.4
 - ✅ 使用 `defineAsyncComponent` 异步加载 BpmnModeler
 - ✅ 实现 Suspense + 骨架屏加载状态
-- ✅ 使用 KeepAlive 缓存组件
+- ✅ 使用 KeepAlive 缓存组件（在 `App.vue` 中包裹 RouterView）
 
 **文件变更：**
-- `src/router/index.js` - 新建路由配置
-- `src/views/DesignerView.vue` - 新建路由视图
-- `src/App.vue` - 改用 RouterView
+- `src/router/index.js` - 新建路由配置（createWebHistory）
+- `src/views/DesignerView.vue` - 新建路由视图（Suspense + defineAsyncComponent）
+- `src/App.vue` - 改用 RouterView + KeepAlive
 - `src/main.js` - 集成路由
 
 #### Vendor 分离
@@ -145,12 +145,19 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            if (!id.includes('node_modules')) return
+
             // Vue core
             if (id.includes('/vue/') || id.includes('/@vue/')) return 'vue-vendor'
             // Icons
             if (id.includes('lucide-vue-next')) return 'icons'
-            // All BPMN packages
-            if (id.includes('bpmn') || id.includes('diagram-js') || ...) return 'bpmn-vendor'
+            // All BPMN-related packages in one chunk to avoid circular deps
+            if (
+              id.includes('bpmn') || id.includes('diagram-js') ||
+              id.includes('moddle') || id.includes('min-dash') ||
+              id.includes('tiny-svg') || id.includes('ids') ||
+              id.includes('didi') || id.includes('camunda')
+            ) return 'bpmn-vendor'
             // Other vendors
             return 'vendor'
           }
@@ -280,15 +287,15 @@ npm run build:analyze
 ## 📦 依赖变更
 
 ### **新增依赖**
-```json
+```jsonc
 {
   "dependencies": {
-    "vue-router": "^4.6.4"  // 路由懒加载
+    "vue-router": "^4.6.4"              // 路由懒加载
   },
   "devDependencies": {
     "rollup-plugin-visualizer": "^6.0.5",  // Bundle 分析
-    "terser": "^5.46.0",  // 代码压缩
-    "vite-plugin-compression": "^0.5.1"  // Gzip/Brotli 压缩
+    "terser": "^5.46.0",                   // 代码压缩
+    "vite-plugin-compression": "^0.5.1"    // Gzip/Brotli 压缩
   }
 }
 ```
